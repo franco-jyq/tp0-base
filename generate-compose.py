@@ -24,6 +24,8 @@ services:
       - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
+    volumes:
+      - ./server/config.ini:/config.ini
 """
 
 # Generate the client services dynamically
@@ -40,6 +42,8 @@ for i in range(1, int(NUM_CLIENTS) + 1):
       - testing_net
     depends_on:
       - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
     """
     docker_compose_template += client_config
 
