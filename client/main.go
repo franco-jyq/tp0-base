@@ -107,16 +107,10 @@ func main() {
 
 	// Print program config with debugging purposes
 	// PrintConfig(v)
+	gamblerProt := common.NewGamblerProtocol(uint8(v.GetInt("id")), v.GetString("nombre"), v.GetString("apellido"), uint32(v.GetInt("documento")), v.GetString("nacimiento"), uint32(v.GetInt("numero")))
+	netComm := common.NewNetComm(v.GetString("server.address"), v.GetString("id"))
 
-	gambler := common.NewGambler(v.GetString("id"), v.GetString("nombre"), v.GetString("apellido"), v.GetString("documento"), v.GetString("nacimiento"), v.GetString("numero"))
+	client := common.NewClient(*gamblerProt, *netComm)
 
-	clientConfig := common.ClientConfig{
-		ServerAddress: v.GetString("server.address"),
-		ID:            v.GetString("id"),
-		LoopAmount:    v.GetInt("loop.amount"),
-		LoopPeriod:    v.GetDuration("loop.period"),
-		Gambler:       *gambler,
-	}
-	client := common.NewClient(clientConfig)
 	client.StartClientLoop()
 }

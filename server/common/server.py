@@ -2,8 +2,10 @@ import socket
 import logging
 import signal
 import threading
-from .utils import store_bets, Bet
-from .gambler import parse_gambler, Gambler
+from .utils import  Bet, recv_all
+from .gambler_protocol import  GamblerProtocol
+
+CHUNK_SIZE = 79
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -43,17 +45,11 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
-        try:
-            
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
-            gambler = parse_gambler(msg)
-            store_bets([Bet(gambler.houseId,gambler.name, gambler.lastName, gambler.dni, gambler.birth, gambler.betNum)])
-            addr = client_sock.getpeername()
-            logging.info(f'action: apuesta_almacenada | result: success | dni: {gambler.dni} | numero: {gambler.betNum}')
-            
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+        try:            
+            data = recv_all(client_sock, CHUNK_SIZE)            
+            gambler_protocol = GamblerProtocol.deserialize(data)
+            gambler_protocol.store_bets()                        
+            client_sock.sendall(gambler_protocol.return_gamble_status())
         
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {e}")
@@ -91,3 +87,4 @@ class Server:
         if self._server_socket:
             self._server_socket.close()
             logging.debug('action: close_socket | result: success')
+
