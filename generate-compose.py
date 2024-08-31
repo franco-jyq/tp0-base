@@ -21,11 +21,12 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
-      - LOGGING_LEVEL=DEBUG
+      - LOGGING_LEVEL=INFO
     networks:
       - testing_net
     volumes:
       - ./server/config.ini:/config.ini
+      - ./server/common/bets.csv:/bets.csv
 """
 
 # Generate the client services dynamically
@@ -37,7 +38,12 @@ for i in range(1, int(NUM_CLIENTS) + 1):
     entrypoint: /client
     environment:
       - CLI_ID={i}
-      - CLI_LOG_LEVEL=DEBUG
+      - CLI_LOG_LEVEL=INFO
+      - CLI_NOMBRE=Santiago Lionel
+      - CLI_APELLIDO=Lorca
+      - CLI_DOCUMENTO=30904465
+      - CLI_NACIMIENTO=1999-03-17
+      - CLI_NUMERO=7574
     networks:
       - testing_net
     depends_on:

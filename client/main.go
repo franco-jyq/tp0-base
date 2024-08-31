@@ -33,6 +33,11 @@ func InitConfig() (*viper.Viper, error) {
 
 	// Add env variables supported
 	v.BindEnv("id")
+	v.BindEnv("nombre")
+	v.BindEnv("apellido")
+	v.BindEnv("documento")
+	v.BindEnv("nacimiento")
+	v.BindEnv("numero")
 	v.BindEnv("server", "address")
 	v.BindEnv("loop", "period")
 	v.BindEnv("loop", "amount")
@@ -101,15 +106,17 @@ func main() {
 	}
 
 	// Print program config with debugging purposes
-	PrintConfig(v)
+	// PrintConfig(v)
+
+	gambler := common.NewGambler(v.GetString("id"), v.GetString("nombre"), v.GetString("apellido"), v.GetString("documento"), v.GetString("nacimiento"), v.GetString("numero"))
 
 	clientConfig := common.ClientConfig{
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
 		LoopAmount:    v.GetInt("loop.amount"),
 		LoopPeriod:    v.GetDuration("loop.period"),
+		Gambler:       *gambler,
 	}
-
 	client := common.NewClient(clientConfig)
 	client.StartClientLoop()
 }

@@ -2,7 +2,8 @@ import socket
 import logging
 import signal
 import threading
-
+from .utils import store_bets, Bet
+from .gambler import parse_gambler, Gambler
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -43,12 +44,17 @@ class Server:
         client socket will also be closed
         """
         try:
+            
             # TODO: Modify the receive to avoid short-reads
             msg = client_sock.recv(1024).rstrip().decode('utf-8')
+            gambler = parse_gambler(msg)
+            store_bets([Bet(gambler.houseId,gambler.name, gambler.lastName, gambler.dni, gambler.birth, gambler.betNum)])
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            logging.info(f'action: apuesta_almacenada | result: success | dni: {gambler.dni} | numero: {gambler.betNum}')
+            
             # TODO: Modify the send to avoid short-writes
             client_sock.send("{}\n".format(msg).encode('utf-8'))
+        
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {e}")
         finally:
