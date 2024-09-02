@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"io"
 	"net"
 )
 
@@ -47,31 +46,6 @@ func (nc *NetComm) sendAll(data []byte) error {
 		totalSent += n
 	}
 	return nil
-}
-
-func (nc *NetComm) readAll(length int) ([]byte, error) {
-	buffer := make([]byte, length)
-	totalRead := 0
-
-	for totalRead < length {
-		n, err := nc.conn.Read(buffer[totalRead:])
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-		if n == 0 {
-			break
-		}
-		totalRead += n
-	}
-
-	if totalRead < length {
-		return nil, fmt.Errorf("connection closed before receiving full message")
-	}
-
-	return buffer, nil
 }
 
 func (nc *NetComm) CloseConnection() {

@@ -2,8 +2,10 @@ package common
 
 import (
 	"bytes"
-	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 )
 
 const (
@@ -14,93 +16,155 @@ const (
 	BirthMaxLenght       = 10
 	BetNumberMaxLenght   = 4
 	ServerResponseLength = 9
+	PACKET_SIZE          = 79
+	BATCH_SIZE           = 1580
+	ACK_SIZE             = 9
+	ACK_BATCH_SIZE       = 180
 )
 
+var END_MESSAGE = append([]byte("END_MESSAGE"), make([]byte, PACKET_SIZE-len("END_MESSAGE"))...)
+var ACK_END_MESSAGE = append([]byte("END"), make([]byte, ACK_SIZE-len("END"))...)
+
 type GamblerProtocol struct {
-	HouseID   uint8
-	Name      string
-	LastName  string
-	DNI       uint32
-	Birth     string
-	BetNumber uint32
+	HouseID           uint8
+	BatchSize         uint16
+	AckSize           uint8
+	Records           [][]string
+	SerializedRecords []byte
+	CurrentPosition   int
 }
 
-func NewGamblerProtocol(houseId uint8, name string, lastName string, dni uint32, birth string, betNum uint32) *GamblerProtocol {
+func NewGamblerProtocol(houseId uint8, records [][]string) *GamblerProtocol {
 	gamblerProtocol := &GamblerProtocol{
-		HouseID:   houseId,
-		Name:      name,
-		LastName:  lastName,
-		DNI:       dni,
-		Birth:     birth,
-		BetNumber: betNum,
+		HouseID:         houseId,
+		BatchSize:       uint16(BATCH_SIZE),
+		AckSize:         uint8(ACK_SIZE),
+		Records:         records,
+		CurrentPosition: 0,
 	}
 	return gamblerProtocol
 }
 
-func (g *GamblerProtocol) SerializeBet() ([]byte, error) {
-	buffer := new(bytes.Buffer)
+func (g *GamblerProtocol) SerializeRecords() error {
+	var recordBuffer bytes.Buffer
 
-	if err := binary.Write(buffer, binary.BigEndian, g.HouseID); err != nil {
-		log.Debugf("Error writing HouseID: %v", err)
-		return nil, err
+	// Iterar sobre cada registro en el lote
+	for _, record := range g.Records {
+		// Crear una nueva instancia de GamblerProtocol con los datos del registro
+		// Santiago Lionel,Lorca,30904465,1999-03-17,2201
+		gambler, err := NewGambler(record[0], record[1], record[2], record[3], record[4])
+
+		if err != nil {
+			log.Debugf("Error creating record: %v", err)
+			continue
+		}
+
+		// Serializar el registro individual
+		serializedBet, err := gambler.SerializeBet(g.HouseID)
+
+		if err != nil {
+			log.Debugf("Error serializing record: %v", err)
+			continue
+		}
+
+		// Escribir los datos serializados en el buffer del lote
+		recordBuffer.Write(serializedBet)
 	}
 
-	if err := writeStringAndPadd(buffer, g.Name, NameMaxLenght); err != nil {
-		log.Debugf("Error writing Name: %v", err)
-		return nil, err
-	}
+	recordBuffer.Write(END_MESSAGE)
 
-	if err := writeStringAndPadd(buffer, g.LastName, LastNameMaxLenght); err != nil {
-		log.Debugf("Error writing LastName: %v", err)
-		return nil, err
-	}
-
-	if err := binary.Write(buffer, binary.BigEndian, g.DNI); err != nil {
-		log.Debugf("Error writing DNI: %v", err)
-		return nil, err
-	}
-
-	if err := writeStringAndPadd(buffer, g.Birth, BirthMaxLenght); err != nil {
-		log.Debugf("Error writing Birth: %v", err)
-		return nil, err
-	}
-
-	if err := binary.Write(buffer, binary.BigEndian, g.BetNumber); err != nil {
-		log.Debugf("Error writing BetNumber: %v", err)
-		return nil, err
-	}
-
-	return buffer.Bytes(), nil
-}
-
-func (g *GamblerProtocol) DeserializeResponse(response []byte) (uint32, uint32, bool, error) {
-
-	var dni uint32
-	var betNumber uint32
-	var statusCode uint8
-
-	buffer := bytes.NewBuffer(response)
-	if err := binary.Read(buffer, binary.BigEndian, &dni); err != nil {
-		return 0, 0, false, err
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &betNumber); err != nil {
-		return 0, 0, false, err
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &statusCode); err != nil {
-		return 0, 0, false, err
-	}
-
-	success := statusCode == 1
-	return dni, betNumber, success, nil
-}
-
-func writeStringAndPadd(buffer *bytes.Buffer, str string, length int) error {
-	data := []byte(str)
-	if len(data) > length {
-		return fmt.Errorf("string length exceeds maximum allowed length")
-	}
-	// Write data an fill with zeros
-	buffer.Write(data)
-	buffer.Write(make([]byte, length-len(data)))
+	g.SerializedRecords = recordBuffer.Bytes()
+	// Retornar los datos serializados del lote
 	return nil
+}
+
+func (g *GamblerProtocol) DeserializeAckBatch(ack_batch []byte) error {
+
+	if len(ack_batch)%int(g.AckSize) != 0 {
+		return errors.New("invalid ack batch length")
+	}
+
+	for i := 0; i < len(ack_batch); i += int(g.AckSize) {
+		packet := ack_batch[i : i+int(g.AckSize)]
+
+		// Check if the packet is the ACK_END_MESSAGE
+		if bytes.Equal(packet, ACK_END_MESSAGE) {
+			return nil
+		}
+
+		// Deserialize the response
+		dni, betNumber, _, err := DeserializeGambleStatus(packet)
+
+		if err != nil {
+			return err
+		}
+
+		log.Infof(`action: apuesta_enviada | result: success | dni: %v | numero: %v`, dni, betNumber)
+
+	}
+
+	return nil
+}
+
+func (g *GamblerProtocol) GetBatch() ([]byte, error) {
+	// Get the length of the serialized records
+	dataLen := len(g.SerializedRecords)
+
+	// Check if there's more data to send
+	if g.CurrentPosition >= dataLen {
+		log.Debugf("No more data to send")
+		return []byte{}, nil
+	}
+	log.Debugf("Data length: %v", dataLen)
+
+	// Calculate the end of the current chunk
+	end := g.CurrentPosition + int(g.BatchSize) // Use g.BatchSize as an integer
+	if end > dataLen {
+		end = dataLen
+	}
+
+	// Get the current chunk
+	chunk := g.SerializedRecords[g.CurrentPosition:end]
+
+	// Update the current position
+	startPosition := g.CurrentPosition
+	g.CurrentPosition = end
+
+	log.Debugf("Returned batch packet from position %d to %d", startPosition, g.CurrentPosition)
+
+	return chunk, nil
+}
+
+func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
+
+	data := make([]byte, 0, ACK_BATCH_SIZE)
+
+	for len(data) < ACK_BATCH_SIZE {
+		remaining := ACK_BATCH_SIZE - len(data)
+		buffer := make([]byte, remaining)
+
+		n, err := s.Read(buffer)
+
+		if err != nil {
+			if err == io.EOF {
+				return nil, false, fmt.Errorf("connection closed prematurely")
+			}
+			return nil, false, err
+		}
+		if n == 0 {
+			return nil, false, fmt.Errorf("no data read")
+		}
+
+		data = append(data, buffer[:n]...)
+
+		// Check if the end message is received
+		if len(data) >= ACK_SIZE && len(data)%ACK_SIZE == 0 {
+			if bytes.Equal(data[len(data)-ACK_SIZE:], ACK_END_MESSAGE) {
+				log.Debugf("End message received")
+				return data, true, nil
+			}
+		}
+	}
+
+	return data, false, nil
 }

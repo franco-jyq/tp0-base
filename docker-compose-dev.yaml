@@ -26,6 +26,7 @@ services:
       - CLI_DOCUMENTO=30904465
       - CLI_NACIMIENTO=1999-03-17
       - CLI_NUMERO=7574
+      - CLI_AGENCY_DATA_FILE=/data/agency-1.csv
     networks:
       - testing_net
     depends_on:
@@ -45,6 +46,7 @@ services:
       - CLI_DOCUMENTO=30904465
       - CLI_NACIMIENTO=1999-03-17
       - CLI_NUMERO=7574
+      - CLI_AGENCY_DATA_FILE=/data/agency-2.csv
     networks:
       - testing_net
     depends_on:
@@ -64,6 +66,7 @@ services:
       - CLI_DOCUMENTO=30904465
       - CLI_NACIMIENTO=1999-03-17
       - CLI_NUMERO=7574
+      - CLI_AGENCY_DATA_FILE=/data/agency-3.csv
     networks:
       - testing_net
     depends_on:
@@ -83,6 +86,7 @@ services:
       - CLI_DOCUMENTO=30904465
       - CLI_NACIMIENTO=1999-03-17
       - CLI_NUMERO=7574
+      - CLI_AGENCY_DATA_FILE=/data/agency-4.csv
     networks:
       - testing_net
     depends_on:
@@ -102,6 +106,7 @@ services:
       - CLI_DOCUMENTO=30904465
       - CLI_NACIMIENTO=1999-03-17
       - CLI_NUMERO=7574
+      - CLI_AGENCY_DATA_FILE=/data/agency-5.csv
     networks:
       - testing_net
     depends_on:

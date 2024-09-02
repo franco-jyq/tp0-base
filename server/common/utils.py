@@ -50,15 +50,3 @@ def load_bets() -> list[Bet]:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
 
 
-"""
-Calls the function recv until <lentgh> amount of data is received.
-"""
-def recv_all(sock, length):
-    data = b''
-    while len(data) < length:
-        packet = sock.recv(length - len(data))
-        if not packet:
-            raise ConnectionError("Connection closed prematurely")
-        data += packet
-    return data
-

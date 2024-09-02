@@ -1,37 +1,82 @@
 import struct
 import logging
 from .utils import store_bets, Bet
+from .gambler import Gambler
+
 
 class GamblerProtocol:
-    def __init__(self, house_id, name, last_name, dni, birth, bet_number):
-        self.house_id = house_id  # Already an integer, no need to decode
-        self.name = name.decode('utf-8').strip('\x00')
-        self.last_name = last_name.decode('utf-8').strip('\x00')
-        self.dni = dni  # Already an integer, no need to decode
-        self.birth = birth.decode('utf-8').strip('\x00')
-        self.bet_number = bet_number  # Already an integer, no need to decode
-        self.status_code = 0
+    def __init__(self, batch_size, packet_size, client_end_message, ack_end_message):
+        self.batch_size = batch_size
+        self.packet_size = packet_size
+        self.client_end_message = client_end_message
+        self.ack_end_message = ack_end_message
+    
+    def deserialize_packets(self, data):
+        packets = []
+        total_data_length = len(data)
+        packet_size = self.packet_size
 
-    @classmethod
-    def deserialize(cls, data):
-        # Big-endian format, matching the Go client's serialization
-        # HouseID (1 byte), Name (30 bytes), LastName (30 bytes), Birth (10 bytes), DNI (4 bytes), BetNumber (4 bytes)
-        format_string = '>B30s30sI10sI'
-        unpacked_data = struct.unpack(format_string, data)
-        return cls(*unpacked_data)
+        for i in range(0, total_data_length, packet_size):
+            packet_data = data[i:i+packet_size]
+            
+            # Check if the packet is the end message
+            if packet_data == self.client_end_message:
+                break
 
-    def store_bets(self):
+            # Deserialize the packet and add it to the list
+            gambler = Gambler.deserialize(packet_data)
+            packets.append(gambler)
+        
+        return packets        
+        
+        
+    def store_bets(self, gamblers):
         """
         Store the bet in the CSV file.
         """
-        store_bets([Bet(self.house_id,self.name, self.last_name, self.dni, self.birth, self.bet_number)])
-        self.status_code = 1
-        logging.info(f'action: apuesta_almacenada | result: success | dni: {self.dni} | numero: {self.bet_number}')
+        for gambler in gamblers:
+            store_bets([Bet(gambler.house_id, gambler.name, gambler.last_name, gambler.dni, gambler.birth, gambler.bet_number)])
+            logging.info(f'action: apuesta_almacenada | result: success | dni: {gambler.dni} | numero: {gambler.bet_number}')
+            gambler.status_code = 1
+        
+        return gamblers
         
 
-    def return_gamble_status(self):
+    def send_packets_ack(self, sock, gamblers):
         """
-        Create a response message indicating success or failure.
+        Send an acknowledgment message of the stored bets to the client.
         """
-        response_format = '>IIB'
-        return struct.pack(response_format, self.dni, self.bet_number, self.status_code)
+        data = b''
+        for gambler in gamblers:
+            data += gambler.serialize_gamble_status()
+
+        # If the number of gamblers is less than the ack batch size, send the end message        
+        if(len(gamblers) < self.batch_size / self.packet_size):
+            data += self.ack_end_message
+
+        sock.sendall(data)
+
+
+
+    def receieve_batch_packets(self, sock):
+        """
+        Calls the function recv until <lentgh> amount of data is received.
+        """
+        data = b''
+        
+        while len(data) < self.batch_size:
+                
+            packet = sock.recv(self.batch_size - len(data))
+                
+            if not packet:
+        
+                raise ConnectionError("Connection closed prematurely")
+            data += packet
+            
+            # Check if the end message is received                    
+            if (len(data) >= int(self.packet_size)) and (len(data) % int(self.packet_size) == 0)  and (data[-int(self.packet_size):] == self.client_end_message):
+                
+                return data, True
+    
+        return data, False
+

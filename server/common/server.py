@@ -2,10 +2,14 @@ import socket
 import logging
 import signal
 import threading
-from .utils import  Bet, recv_all
+from .utils import  Bet
 from .gambler_protocol import  GamblerProtocol
 
-CHUNK_SIZE = 79
+BATCH_SIZE = 1580
+PACKET_SIZE = 79
+ACK_SIZE = 9
+CLIENT_END_MESSAGE = b'END_MESSAGE' + b'\x00' * (PACKET_SIZE - len(b'END_MESSAGE'))
+ACK_END_MESSAGE = b'END' + b'\x00' * (ACK_SIZE - len(b'END'))
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -14,6 +18,7 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._server_is_shutting_down = threading.Event()
+        self._gambler_protocol = GamblerProtocol(BATCH_SIZE, PACKET_SIZE, CLIENT_END_MESSAGE, ACK_END_MESSAGE)
 
     def run(self):
         """
@@ -46,13 +51,18 @@ class Server:
         client socket will also be closed
         """
         try:            
-            data = recv_all(client_sock, CHUNK_SIZE)            
-            gambler_protocol = GamblerProtocol.deserialize(data)
-            gambler_protocol.store_bets()                        
-            client_sock.sendall(gambler_protocol.return_gamble_status())
+            end_msg_received = False
+            bets_received = 0
+            while not end_msg_received:                
+                data, end_msg_received = self._gambler_protocol.receieve_batch_packets(client_sock)            
+                gamblers = self._gambler_protocol.deserialize_packets(data)
+                gamblers_stored = self._gambler_protocol.store_bets(gamblers)
+                bets_received += len(gamblers)                        
+                self._gambler_protocol.send_packets_ack(client_sock, gamblers_stored)
+            logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_received}')    
         
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+            logging.error("action: receive_message | result: fail | error: {}", e)
         finally:
             client_sock.close()
 

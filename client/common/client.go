@@ -42,6 +42,8 @@ func (c *Client) StartClientLoop() {
 
 		err := c.netComm.createConnection()
 
+		defer c.netComm.CloseConnection()
+
 		if err != nil {
 			log.Errorf("action: connect | result: fail | client_id: %v | error: %v",
 				c.netComm.clientId,
@@ -50,60 +52,47 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		bytes, err := c.gamblerProt.SerializeBet()
+		c.gamblerProt.SerializeRecords()
 
-		if err != nil {
-			log.Errorf("action: serialize | result: fail | client_id: %v | error: %v",
-				c.netComm.clientId,
-				err,
-			)
-			c.netComm.CloseConnection()
-			return
-		}
+		for done_sending, done_receiving := false, false; !done_sending && !done_receiving; {
 
-		err = c.netComm.sendAll(bytes)
+			batch, _ := c.gamblerProt.GetBatch()
+			log.Debugf("Batch generated")
 
-		if err != nil {
-			log.Errorf("action: send_message | result: fail | client_id: %v | error: %v")
-			c.netComm.CloseConnection()
-			return
-		}
+			if len(batch) == 0 {
+				done_sending = true
+			}
 
-		log.Infof(`action: apuesta_enviada | result: success | dni: %v | numero: %v`,
-			c.gamblerProt.DNI, c.gamblerProt.BetNumber,
-		)
+			err = c.netComm.sendAll(batch)
+			log.Debugf("Batch sended")
 
-		response, err := c.netComm.readAll(ServerResponseLength)
+			if err != nil {
+				log.Errorf("action: send_message | result: fail | client_id: %v | error: %v")
+				c.netComm.CloseConnection()
+				return
+			}
 
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.netComm.clientId,
-				err,
-			)
-			c.netComm.CloseConnection()
-			return
-		}
+			ack_batch, is_ended, err := c.gamblerProt.ReceiveAckBatch(c.netComm.conn)
 
-		dni, betNumber, success, err := c.gamblerProt.DeserializeResponse(response)
+			if err != nil {
+				log.Errorf("error: %v",
+					err,
+				)
+				return
+			}
 
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.netComm.clientId,
-				err,
-			)
-			return
-		}
+			done_receiving = is_ended
 
-		if success {
-			log.Debugf(`action: server_status | result: success | dni: %v | numero: %v`,
-				dni, betNumber,
-			)
-		} else {
-			log.Errorf(`action: server_status | result: fail | dni: %v | numero: %v`,
-				dni, betNumber)
+			err = c.gamblerProt.DeserializeAckBatch(ack_batch)
+
+			if err != nil {
+				log.Errorf("error: %v",
+					err,
+				)
+			}
 		}
 
 		c.netComm.CloseConnection()
-
+		return
 	}
 }

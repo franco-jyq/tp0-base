@@ -44,6 +44,7 @@ for i in range(1, int(NUM_CLIENTS) + 1):
       - CLI_DOCUMENTO=30904465
       - CLI_NACIMIENTO=1999-03-17
       - CLI_NUMERO=7574
+      - CLI_AGENCY_DATA_FILE=/data/agency-{i}.csv
     networks:
       - testing_net
     depends_on:

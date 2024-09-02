@@ -38,6 +38,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("documento")
 	v.BindEnv("nacimiento")
 	v.BindEnv("numero")
+	v.BindEnv("agency", "data", "file")
 	v.BindEnv("server", "address")
 	v.BindEnv("loop", "period")
 	v.BindEnv("loop", "amount")
@@ -105,12 +106,26 @@ func main() {
 		log.Criticalf("%s", err)
 	}
 
-	// Print program config with debugging purposes
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	records, err := common.ParseCSV(v.GetString("agency.data.file"))
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	// PrintConfig(v)
-	gamblerProt := common.NewGamblerProtocol(uint8(v.GetInt("id")), v.GetString("nombre"), v.GetString("apellido"), uint32(v.GetInt("documento")), v.GetString("nacimiento"), uint32(v.GetInt("numero")))
+	// 79 bytes
+	// 1580 batch size -> 20 apuestas por batch
+	// 8192/79 -> maxAmount = 103 | Si es mayor, pisar con 103
+
+	gamblerProtocol := common.NewGamblerProtocol(uint8(v.GetInt("id")), records)
 	netComm := common.NewNetComm(v.GetString("server.address"), v.GetString("id"))
 
-	client := common.NewClient(*gamblerProt, *netComm)
+	client := common.NewClient(*gamblerProtocol, *netComm)
 
 	client.StartClientLoop()
 }
