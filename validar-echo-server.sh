@@ -22,8 +22,8 @@ validate_server() {
         echo "Validating echo server..."
     fi
 
-    output=$(docker run --rm --network $NETWORK_NAME busybox sh -c "echo '$MESSAGE' | nc $SERVER_IP $SERVER_PORT")
-
+    output=$(docker run --rm --network $NETWORK_NAME busybox sh -c "echo '$MESSAGE' | nc -w 10 $SERVER_IP $SERVER_PORT")
+    
     if [ $VERBOSE -eq 1 ]; then
         echo "Validation Output:"
         echo "$output"
