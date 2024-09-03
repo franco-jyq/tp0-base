@@ -30,7 +30,7 @@ validate_server() {
     fi
 
     # Check if the output matches the expected echo
-    if [ "$output" == "$MESSAGE" ]; then
+    if [ "$output" = "$MESSAGE" ]; then
         echo "action: test_echo_server | result: success"
     else
         echo "action: test_echo_server | result: fail"
