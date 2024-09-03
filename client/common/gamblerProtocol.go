@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -9,40 +10,61 @@ import (
 )
 
 const (
-	HouseIDLenght        = 1
-	NameMaxLenght        = 30
-	LastNameMaxLenght    = 30
-	DNIMaxLenght         = 4
-	BirthMaxLenght       = 10
-	BetNumberMaxLenght   = 4
-	ServerResponseLength = 9
-	PACKET_SIZE          = 79
-	BATCH_SIZE           = 1580
-	ACK_SIZE             = 9
-	ACK_BATCH_SIZE       = 180
+	HouseIDLenght      = 1
+	NameMaxLenght      = 30
+	LastNameMaxLenght  = 30
+	DNIMaxLenght       = 4
+	BirthMaxLenght     = 10
+	BetNumberMaxLenght = 4
+	PacketSize         = 79
+	AckSize            = 9
+	MaxBatchSize       = 8137
 )
 
-var END_MESSAGE = append([]byte("END_MESSAGE"), make([]byte, PACKET_SIZE-len("END_MESSAGE"))...)
-var ACK_END_MESSAGE = append([]byte("END"), make([]byte, ACK_SIZE-len("END"))...)
+var END_MESSAGE = append([]byte("END_MESSAGE"), make([]byte, PacketSize-len("END_MESSAGE"))...)
+var ACK_END_MESSAGE = append([]byte("END"), make([]byte, AckSize-len("END"))...)
 
 type GamblerProtocol struct {
 	HouseID           uint8
 	BatchSize         uint16
+	batchAmount       uint16
 	AckSize           uint8
 	Records           [][]string
 	SerializedRecords []byte
 	CurrentPosition   int
 }
 
-func NewGamblerProtocol(houseId uint8, records [][]string) *GamblerProtocol {
+func NewGamblerProtocol(houseId uint8, records [][]string, batchAmount uint16) *GamblerProtocol {
+
+	batchSize := batchAmount * PacketSize
+
+	if batchSize > uint16(MaxBatchSize) {
+		log.Debugf("Batch size is greater than the maximum allowed, setting to %d", MaxBatchSize)
+		batchSize = uint16(MaxBatchSize)
+		batchAmount = batchSize / PacketSize
+	}
+
 	gamblerProtocol := &GamblerProtocol{
 		HouseID:         houseId,
-		BatchSize:       uint16(BATCH_SIZE),
-		AckSize:         uint8(ACK_SIZE),
+		batchAmount:     batchAmount,
+		BatchSize:       uint16(batchSize),
+		AckSize:         uint8(AckSize),
 		Records:         records,
 		CurrentPosition: 0,
 	}
 	return gamblerProtocol
+}
+
+func (g *GamblerProtocol) GetBatchSize() ([]byte, error) {
+
+	// Serialize the batch size
+	buffer := new(bytes.Buffer)
+	if err := binary.Write(buffer, binary.BigEndian, g.BatchSize); err != nil {
+		log.Debugf("Error writing batch size: %v", err)
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
 
 func (g *GamblerProtocol) SerializeRecords() error {
@@ -50,8 +72,7 @@ func (g *GamblerProtocol) SerializeRecords() error {
 
 	// Iterar sobre cada registro en el lote
 	for _, record := range g.Records {
-		// Crear una nueva instancia de GamblerProtocol con los datos del registro
-		// Santiago Lionel,Lorca,30904465,1999-03-17,2201
+
 		gambler, err := NewGambler(record[0], record[1], record[2], record[3], record[4])
 
 		if err != nil {
@@ -137,10 +158,11 @@ func (g *GamblerProtocol) GetBatch() ([]byte, error) {
 
 func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 
-	data := make([]byte, 0, ACK_BATCH_SIZE)
+	ackBatchSize := AckSize * g.batchAmount
+	data := make([]byte, 0, ackBatchSize)
 
-	for len(data) < ACK_BATCH_SIZE {
-		remaining := ACK_BATCH_SIZE - len(data)
+	for len(data) < int(ackBatchSize) {
+		remaining := int(ackBatchSize) - len(data)
 		buffer := make([]byte, remaining)
 
 		n, err := s.Read(buffer)
@@ -158,8 +180,8 @@ func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 		data = append(data, buffer[:n]...)
 
 		// Check if the end message is received
-		if len(data) >= ACK_SIZE && len(data)%ACK_SIZE == 0 {
-			if bytes.Equal(data[len(data)-ACK_SIZE:], ACK_END_MESSAGE) {
+		if len(data) >= AckSize && len(data)%AckSize == 0 {
+			if bytes.Equal(data[len(data)-AckSize:], ACK_END_MESSAGE) {
 				log.Debugf("End message received")
 				return data, true, nil
 			}

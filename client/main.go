@@ -43,6 +43,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("loop", "period")
 	v.BindEnv("loop", "amount")
 	v.BindEnv("log", "level")
+	v.BindEnv("batch", "maxAmount")
 
 	// Try to read configuration from config file. If config file
 	// does not exists then ReadInConfig will fail but configuration
@@ -117,12 +118,15 @@ func main() {
 		fmt.Println("Error:", err)
 		return
 	}
-	// PrintConfig(v)
-	// 79 bytes
+	PrintConfig(v)
+	// 79 bytes maxAmount: Cantidad de apuestas
 	// 1580 batch size -> 20 apuestas por batch
 	// 8192/79 -> maxAmount = 103 | Si es mayor, pisar con 103
 
-	gamblerProtocol := common.NewGamblerProtocol(uint8(v.GetInt("id")), records)
+	houseId := v.GetInt("id")
+	batchSize := v.GetInt("batch.maxAmount")
+
+	gamblerProtocol := common.NewGamblerProtocol(uint8(houseId), records, uint16(batchSize))
 	netComm := common.NewNetComm(v.GetString("server.address"), v.GetString("id"))
 
 	client := common.NewClient(*gamblerProtocol, *netComm)

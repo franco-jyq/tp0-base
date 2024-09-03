@@ -11,6 +11,14 @@ class GamblerProtocol:
         self.client_end_message = client_end_message
         self.ack_end_message = ack_end_message
     
+    def receive_batch_size(self, sock):
+        """
+        Receives the batch size from the client.
+        """
+        data = sock.recv(2)
+        self.batch_size = struct.unpack('>H', data)[0]
+    
+        
     def deserialize_packets(self, data):
         packets = []
         total_data_length = len(data)
@@ -25,6 +33,11 @@ class GamblerProtocol:
 
             # Deserialize the packet and add it to the list
             gambler = Gambler.deserialize(packet_data)
+
+            if not gambler:
+                logging.error(f'action: deserializacion_fallida | result: failed | packet_data: {packet_data}')
+                return None
+
             packets.append(gambler)
         
         return packets        
@@ -63,7 +76,6 @@ class GamblerProtocol:
         Calls the function recv until <lentgh> amount of data is received.
         """
         data = b''
-        
         while len(data) < self.batch_size:
                 
             packet = sock.recv(self.batch_size - len(data))
@@ -79,4 +91,6 @@ class GamblerProtocol:
                 return data, True
     
         return data, False
+
+
 

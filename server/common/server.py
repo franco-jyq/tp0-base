@@ -5,7 +5,7 @@ import threading
 from .utils import  Bet
 from .gambler_protocol import  GamblerProtocol
 
-BATCH_SIZE = 1580
+MAX_BATCH_SIZE = 8137
 PACKET_SIZE = 79
 ACK_SIZE = 9
 CLIENT_END_MESSAGE = b'END_MESSAGE' + b'\x00' * (PACKET_SIZE - len(b'END_MESSAGE'))
@@ -18,7 +18,7 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._server_is_shutting_down = threading.Event()
-        self._gambler_protocol = GamblerProtocol(BATCH_SIZE, PACKET_SIZE, CLIENT_END_MESSAGE, ACK_END_MESSAGE)
+        self._gambler_protocol = GamblerProtocol(MAX_BATCH_SIZE, PACKET_SIZE, CLIENT_END_MESSAGE, ACK_END_MESSAGE)
 
     def run(self):
         """
@@ -51,16 +51,39 @@ class Server:
         client socket will also be closed
         """
         try:            
+            self._gambler_protocol.receive_batch_size(client_sock)
             end_msg_received = False
-            bets_received = 0
+            bets_received = 0            
+            
             while not end_msg_received:                
+                
+                # Receive batch from client
                 data, end_msg_received = self._gambler_protocol.receieve_batch_packets(client_sock)            
+                
+                # Deserialize batch
                 gamblers = self._gambler_protocol.deserialize_packets(data)
+
+                if not gamblers:
+                    logging.error(f'action: apuesta_recibida | result: fail | cantidad: {bets_received}')
+                    return
+
+                # Store bets
                 gamblers_stored = self._gambler_protocol.store_bets(gamblers)
+
+                if not gamblers_stored:
+                    logging.error(f'action: apuesta_almacenada | result: fail | cantidad: {bets_received}')
+                    return
+
                 bets_received += len(gamblers)                        
-                self._gambler_protocol.send_packets_ack(client_sock, gamblers_stored)
+                
+                # TODO handle error
+                # Send acknowledgment of the bets stored
+                self._gambler_protocol.send_packets_ack(client_sock, gamblers_stored)                
+            
             logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_received}')    
-        
+            
+
+
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {}", e)
         finally:

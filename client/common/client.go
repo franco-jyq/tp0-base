@@ -52,6 +52,10 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
+		batchBytes, _ := c.gamblerProt.GetBatchSize()
+
+		c.netComm.sendAll(batchBytes)
+
 		c.gamblerProt.SerializeRecords()
 
 		for done_sending, done_receiving := false, false; !done_sending && !done_receiving; {

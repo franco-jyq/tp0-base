@@ -13,11 +13,15 @@ class Gambler:
 
     @classmethod
     def deserialize(cls, data):
-    # Big-endian format, matching the Go client's serialization
+        # Big-endian format, matching the Go client's serialization
         # HouseID (1 byte), Name (30 bytes), LastName (30 bytes), Birth (10 bytes), DNI (4 bytes), BetNumber (4 bytes)
         format_string = '>B30s30sI10sI'
-        unpacked_data = struct.unpack(format_string, data)
-        return cls(*unpacked_data)
+        try:
+            unpacked_data = struct.unpack(format_string, data)
+            return cls(*unpacked_data)
+        except struct.error as e:
+            print(f"Error deserializing data: {e}")
+            return None
 
     def serialize_gamble_status(self):
         """
