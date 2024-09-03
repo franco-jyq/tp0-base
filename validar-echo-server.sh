@@ -1,6 +1,6 @@
 #!/bin/bash
 
-NETWORK_NAME="tp0-base_testing_net"
+NETWORK_NAME="testing_net"
 SERVER_CONTAINER_NAME="server"
 SERVER_IP="172.25.125.2"  
 SERVER_PORT=12345         
@@ -22,7 +22,7 @@ validate_server() {
         echo "Validating echo server..."
     fi
 
-    output=$(docker run --rm --network $NETWORK_NAME busybox sh -c "echo '$MESSAGE' | nc -w 10 $SERVER_IP $SERVER_PORT")
+    output=$(docker run --rm --network $NETWORK_NAME busybox sh -c "echo '$MESSAGE' | nc $SERVER_IP $SERVER_PORT")
     
     if [ $VERBOSE -eq 1 ]; then
         echo "Validation Output:"
