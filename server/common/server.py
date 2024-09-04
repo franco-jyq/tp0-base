@@ -7,55 +7,45 @@ from .gambler_protocol import  GamblerProtocol
 import queue
 import multiprocessing
 
-MAX_BATCH_SIZE = 8137
-PACKET_SIZE = 79
-ACK_SIZE = 9
-CLIENT_END_MESSAGE = b'END_MESSAGE' + b'\x00' * (PACKET_SIZE - len(b'END_MESSAGE'))
-ACK_END_MESSAGE = b'END' + b'\x00' * (ACK_SIZE - len(b'END'))
-MAX_CLIENTS = 5
 
 class Server:
     """
     Server class that handles the communication with the clients
     """
-    def __init__(self, port, listen_backlog):
+    def __init__(self, port, listen_backlog, max_batch_size, packet_size, ack_size):
         empty_storage_file()
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._server_is_shutting_down = threading.Event()
-        self._gambler_protocol = GamblerProtocol(MAX_BATCH_SIZE, PACKET_SIZE, CLIENT_END_MESSAGE, ACK_END_MESSAGE)
+        self._gambler_protocol = GamblerProtocol(max_batch_size, packet_size, ack_size)
         self._client_queue = queue.Queue()
         self._clients_registered = {}
         self._clients_proccessed = 0
         self._clients_arrived = 0
-        self._max_clients = MAX_CLIENTS
+        self._max_clients = listen_backlog
 
     def run(self):
         """
-        Dummy Server loop
-
-        Server that accept a new connections and establishes a
-        communication with a client. After client with communucation
-        finishes, servers starts to accept new connections again
+        Run the server which will accept 5 connections from clients, store the bets and then
+        perform a lottery to select the winners. The server will then send the winners to the clients
+        and close the connections.
         """   
         signal.signal(signal.SIGTERM, self.__signal_handler)
         barrier = multiprocessing.Barrier(self._max_clients + 1)
-        store_and_load_bet_lock = multiprocessing.Lock()
         cond = multiprocessing.Condition()
-        manager = multiprocessing.Manager()
-        winners = manager.dict()
 
         while not self._server_is_shutting_down.is_set():
             
             # Set timeout for the server socket
             self._server_socket.settimeout(1.0)
+
             try:
                 # Accept new connection
                 client_sock = self.__accept_new_connection()
                 
                 # Handle client connection
-                p = multiprocessing.Process(target=self.__handle_client_connection, args=(client_sock,barrier, winners, cond, store_and_load_bet_lock))
+                p = multiprocessing.Process(target=self.__handle_client_connection, args=(client_sock,barrier, cond))
                 self._client_queue.put(p)
                 p.start()
                 self._clients_arrived += 1
@@ -68,15 +58,14 @@ class Server:
                     
                     logging.info(f'action: sorteo | result: success')                    
                     
-                    # Load winners
-                    with store_and_load_bet_lock:
-                        self._gambler_protocol.load_lottery_winners(winners)
+                    # Load winners                    
+                    self._gambler_protocol.load_lottery_winners()
                                                                 
                     # Notify all clients that the lottery has finished
                     with  cond:
                         cond.notify_all()
                     
-                    # Send winners to clients
+                    # Join proccees
                     while not self._client_queue.empty():                        
                         client_p = self._client_queue.get()
                         client_p.join()                                            
@@ -90,12 +79,11 @@ class Server:
 
 
 
-    def __handle_client_connection(self, client_sock, barrier, winners, cond, store_bet_lock):
+    def __handle_client_connection(self, client_sock, barrier, cond):
         """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
+        Read client metadata and bets, store the bets and send acknowledgment to the client after storing the bets.
+        Wait for all clients to finish storing the bets and then wait for the lottery to finish.
+        Send the winners to the clients.
         """
         try:            
             id = self._gambler_protocol.receive_metadata(client_sock)
@@ -103,6 +91,7 @@ class Server:
             end_msg_received = False
             bets_received = 0            
             
+            # Receive batch from client until end message is received
             while not end_msg_received:                
                 
                 # Receive batch from client
@@ -116,8 +105,7 @@ class Server:
                     return
 
                 # Store bets
-                with store_bet_lock:
-                    gamblers_stored = self._gambler_protocol.store_bets(gamblers)
+                gamblers_stored = self._gambler_protocol.store_bets(gamblers)
 
                 
                 if not gamblers_stored:
@@ -126,7 +114,6 @@ class Server:
 
                 bets_received += len(gamblers)                        
                 
-                # TODO handle error
                 # Send acknowledgment of the bets stored
                 self._gambler_protocol.send_packets_ack(client_sock, gamblers_stored)                
             
@@ -138,8 +125,7 @@ class Server:
             # Wait for the lottery to finish
             with cond:
                 cond.wait()
-                cli_winners = winners[id]
-                serialized_winners = self._gambler_protocol.serialize_winners_documents(cli_winners)
+                serialized_winners = self._gambler_protocol.serialize_winners_documents(id)
                 client_sock.sendall(serialized_winners)
                         
 

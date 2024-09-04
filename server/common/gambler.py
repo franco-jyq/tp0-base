@@ -5,12 +5,12 @@ from .utils import Bet
 
 class Gambler:
     def __init__(self, house_id, name, last_name, dni, birth, bet_number):
-        self.house_id = house_id  # Already an integer, no need to decode
+        self.house_id = house_id  
         self.name = name.decode('utf-8').strip('\x00')
         self.last_name = last_name.decode('utf-8').strip('\x00')
-        self.dni = dni  # Already an integer, no need to decode
+        self.dni = dni  
         self.birth = birth.decode('utf-8').strip('\x00')
-        self.bet_number = bet_number  # Already an integer, no need to decode
+        self.bet_number = bet_number 
         self.status_code = 0
 
     @classmethod

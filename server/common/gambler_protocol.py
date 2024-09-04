@@ -2,24 +2,28 @@ import struct
 import logging
 from .gambler import Gambler
 from .utils import  Bet, load_bets, has_won, store_bets
+import multiprocessing
 
 
 class GamblerProtocol:
     """
     Class that handles the communication protocol between the server and the client.
     """
-    def __init__(self, batch_size, packet_size, client_end_message, ack_end_message):
-        self.batch_size = batch_size
+    def __init__(self, max_batch_size, packet_size, ack_size):          
+        self.winners = multiprocessing.Manager().dict()
+        self.store_and_load_bet_lock = multiprocessing.Lock()
+        self.batch_size = max_batch_size
         self.packet_size = packet_size
-        self.client_end_message = client_end_message
-        self.ack_end_message = ack_end_message
+        self.client_end_message = b'END_MESSAGE' + b'\x00' * (packet_size - len(b'END_MESSAGE'))
+        self.ack_end_message = b'END' + b'\x00' * (ack_size - len(b'END'))
+        self.metadata_size = 4
     
     def receive_metadata(self, sock):
         """
         Receives the batch size and id from the client.
-        """
-        data = sock.recv(4)  # Receive 4 bytes: 2 for batch size and 2 for ID
-        self.batch_size, id = struct.unpack('>HH', data)  # Unpack 2 bytes as unsigned short and 4 bytes as unsigned int
+        """        
+        data = sock.recv(self.metadata_size)  
+        self.batch_size, id = struct.unpack('>HH', data)  
         return  id
         
         
@@ -54,10 +58,12 @@ class GamblerProtocol:
         """
         Store the bet in the CSV file.
         """
-        for gambler in gamblers:
-            store_bets([Bet(gambler.house_id, gambler.name, gambler.last_name, gambler.dni, gambler.birth, gambler.bet_number)])
-            logging.info(f'action: apuesta_almacenada | result: success | dni: {gambler.dni} | numero: {gambler.bet_number}')
-            gambler.status_code = 1
+        with self.store_and_load_bet_lock:
+            
+            for gambler in gamblers:
+                store_bets([Bet(gambler.house_id, gambler.name, gambler.last_name, gambler.dni, gambler.birth, gambler.bet_number)])
+                logging.info(f'action: apuesta_almacenada | result: success | dni: {gambler.dni} | numero: {gambler.bet_number}')
+                gambler.status_code = 1
         
         return gamblers
         
@@ -94,8 +100,8 @@ class GamblerProtocol:
             packet = sock.recv(self.batch_size - len(data))
                 
             if not packet:
-        
                 raise ConnectionError("Connection closed prematurely")
+            
             data += packet
             
             # Check if the end message is received                    
@@ -106,12 +112,13 @@ class GamblerProtocol:
         return data, False
 
 
-    def serialize_winners_documents(self, winners):
+    def serialize_winners_documents(self, id):
         """
         Serializes the winners documents.
         """
+        cli_winners = self.winners[id]
         data = b''
-        for bet in winners:
+        for bet in cli_winners:
             data += Gambler.serialize_document(bet)
         
         length = len(data)
@@ -119,16 +126,18 @@ class GamblerProtocol:
         return struct.pack('>H', length) + data
 
 
-    def load_lottery_winners(self, winners):
+    def load_lottery_winners(self):
         """
         Returns the lottery winners.
         """
-        bets = load_bets()
+        with self.store_and_load_bet_lock:
+            bets = load_bets()
+
         for bet in bets:
-            if bet.agency not in winners:
-                winners[bet.agency] = []
+            if bet.agency not in self.winners:
+                self.winners[bet.agency] = []
             
             if has_won(bet):
-                current_winners = winners[bet.agency]  # Obtener la lista actual
-                current_winners.append(bet)            # Agregar el nuevo bet a la lista
-                winners[bet.agency] = current_winners  # Reasignar la lista actualizada al diccionario
+                current_winners = self.winners[bet.agency]  
+                current_winners.append(bet)            
+                self.winners[bet.agency] = current_winners 
