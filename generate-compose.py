@@ -6,7 +6,7 @@ NUM_CLIENTS = sys.argv[2]
 
 
 # Check if the number is a valid positive integer
-if not NUM_CLIENTS.isdigit() or int(NUM_CLIENTS) <= 0:
+if not NUM_CLIENTS.isdigit() or int(NUM_CLIENTS) < 0:
     print("Error: NUM_CLIENTS must be a positive integer.", file=sys.stderr)
     sys.exit(1)
 
