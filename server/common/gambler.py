@@ -1,4 +1,6 @@
 import struct
+from .utils import Bet
+
 
 
 class Gambler:
@@ -13,8 +15,10 @@ class Gambler:
 
     @classmethod
     def deserialize(cls, data):
-        # Big-endian format, matching the Go client's serialization
-        # HouseID (1 byte), Name (30 bytes), LastName (30 bytes), Birth (10 bytes), DNI (4 bytes), BetNumber (4 bytes)
+        """
+        Deserialize the data received from the client. 
+        With format house_id, name, last_name, dni, birth, bet_number matching the struct format.
+        """
         format_string = '>B30s30sI10sI'
         try:
             unpacked_data = struct.unpack(format_string, data)
@@ -30,6 +34,14 @@ class Gambler:
         response_format = '>IIB'
         return struct.pack(response_format, self.dni, self.bet_number, self.status_code)
 
+    @classmethod
+    def serialize_document(cls, bet):
+        """
+        Serialize the document of the bet.
+        """
+        return struct.pack('>I', int(bet.document))
+    
+    
     def __str__(self):
         return f'Gambler(house_id={self.house_id}, name={self.name}, last_name={self.last_name}, dni={self.dni}, birth={self.birth}, bet_number={self.bet_number}, status_code={self.status_code})'
 

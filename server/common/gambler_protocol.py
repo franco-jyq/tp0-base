@@ -1,25 +1,32 @@
 import struct
 import logging
-from .utils import store_bets, Bet
 from .gambler import Gambler
+from .utils import  Bet, load_bets, has_won, store_bets
 
 
 class GamblerProtocol:
+    """
+    Class that handles the communication protocol between the server and the client.
+    """
     def __init__(self, batch_size, packet_size, client_end_message, ack_end_message):
         self.batch_size = batch_size
         self.packet_size = packet_size
         self.client_end_message = client_end_message
         self.ack_end_message = ack_end_message
     
-    def receive_batch_size(self, sock):
+    def receive_metadata(self, sock):
         """
-        Receives the batch size from the client.
+        Receives the batch size and id from the client.
         """
-        data = sock.recv(2)
-        self.batch_size = struct.unpack('>H', data)[0]
-    
+        data = sock.recv(4)  # Receive 4 bytes: 2 for batch size and 2 for ID
+        self.batch_size, id = struct.unpack('>HH', data)  # Unpack 2 bytes as unsigned short and 4 bytes as unsigned int
+        return  id
+        
         
     def deserialize_packets(self, data):
+        """
+        Deserialize the packets received from the client.
+        """
         packets = []
         total_data_length = len(data)
         packet_size = self.packet_size
@@ -61,9 +68,15 @@ class GamblerProtocol:
         """
         data = b''
         for gambler in gamblers:
+            
+            gambler_status = gambler.serialize_gamble_status()
+
+            if not gambler_status:
+                continue
+
             data += gambler.serialize_gamble_status()
 
-        # If the number of gamblers is less than the ack batch size, send the end message        
+        # If the number of gamblers is less than the ack batch size, send the end message.       
         if(len(gamblers) < self.batch_size / self.packet_size):
             data += self.ack_end_message
 
@@ -93,4 +106,32 @@ class GamblerProtocol:
         return data, False
 
 
+    def serialize_winners_documents(self, winners):
+        """
+        Serializes the winners documents.
+        """
+        data = b''
+        for bet in winners:
+            data += Gambler.serialize_document(bet)
+        
+        length = len(data)
 
+        return struct.pack('>H', length) + data
+
+
+    def get_lottery_winners(self):
+        """
+        Returns the lottery winners.
+        """
+        bets = load_bets()
+        winners = {}        
+        for bet in bets:
+            
+            if bet.agency not in winners:
+                winners[bet.agency] = []
+
+            if has_won(bet):
+                logging.debug(f'action: ganador | result: success | dni: {bet.document} | numero: {bet.number}')
+                winners[bet.agency].append(bet)
+        
+        return winners

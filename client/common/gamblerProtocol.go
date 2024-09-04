@@ -32,12 +32,16 @@ type GamblerProtocol struct {
 	Records           [][]string
 	SerializedRecords []byte
 	CurrentPosition   int
+	Winners           []uint32
 }
 
-func NewGamblerProtocol(houseId uint8, records [][]string, batchAmount uint16) *GamblerProtocol {
+// NewGamblerProtocol Initializes a new gambler protocol
+// receiving the house id, the records to send and the batch amount
+func NewGamblerProtocol(houseId uint8, records [][]string, batchAmount uint16) (*GamblerProtocol, error) {
 
 	batchSize := batchAmount * PacketSize
 
+	// Check if the batch size is greater than the maximum allowed
 	if batchSize > uint16(MaxBatchSize) {
 		log.Debugf("Batch size is greater than the maximum allowed, setting to %d", MaxBatchSize)
 		batchSize = uint16(MaxBatchSize)
@@ -51,22 +55,35 @@ func NewGamblerProtocol(houseId uint8, records [][]string, batchAmount uint16) *
 		AckSize:         uint8(AckSize),
 		Records:         records,
 		CurrentPosition: 0,
+		Winners:         make([]uint32, 0),
 	}
-	return gamblerProtocol
+
+	// Serialize the records
+	if err := gamblerProtocol.SerializeRecords(); err != nil {
+		return nil, err
+	}
+
+	return gamblerProtocol, nil
 }
 
-func (g *GamblerProtocol) GetBatchSize() ([]byte, error) {
+func (g *GamblerProtocol) GetMetadata(houseId uint16) ([]byte, error) {
 
-	// Serialize the batch size
+	// Serialize the batch size and house ID
 	buffer := new(bytes.Buffer)
 	if err := binary.Write(buffer, binary.BigEndian, g.BatchSize); err != nil {
 		log.Debugf("Error writing batch size: %v", err)
 		return nil, err
 	}
 
+	if err := binary.Write(buffer, binary.BigEndian, uint16(houseId)); err != nil {
+		log.Debugf("Error writing house ID: %v", err)
+		return nil, err
+	}
+
 	return buffer.Bytes(), nil
 }
 
+// SerilizeRecords Serializes the records to send
 func (g *GamblerProtocol) SerializeRecords() error {
 	var recordBuffer bytes.Buffer
 
@@ -99,6 +116,7 @@ func (g *GamblerProtocol) SerializeRecords() error {
 	return nil
 }
 
+// DeserializeAckBatch Deserializes the ack batch
 func (g *GamblerProtocol) DeserializeAckBatch(ack_batch []byte) error {
 
 	if len(ack_batch)%int(g.AckSize) != 0 {
@@ -127,7 +145,10 @@ func (g *GamblerProtocol) DeserializeAckBatch(ack_batch []byte) error {
 	return nil
 }
 
+// GetBatch Returns the next batch to send. If there's no more data
+// to send it returns an empty byte array
 func (g *GamblerProtocol) GetBatch() ([]byte, error) {
+
 	// Get the length of the serialized records
 	dataLen := len(g.SerializedRecords)
 
@@ -156,8 +177,12 @@ func (g *GamblerProtocol) GetBatch() ([]byte, error) {
 	return chunk, nil
 }
 
+// ReceiveAckBatch Receives the ack batch from the server
+// and returns the data received. If the end message is received
+// it returns true
 func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 
+	// Calculate the ack batch size
 	ackBatchSize := AckSize * g.batchAmount
 	data := make([]byte, 0, ackBatchSize)
 
@@ -173,6 +198,7 @@ func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 			}
 			return nil, false, err
 		}
+
 		if n == 0 {
 			return nil, false, fmt.Errorf("no data read")
 		}
@@ -189,4 +215,47 @@ func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 	}
 
 	return data, false, nil
+}
+
+// ReceiveWinnersList Receives the winners list from the server
+// and returns the number of winners received.
+func (g *GamblerProtocol) ReceiveWinnersList(nc NetComm) (uint16, error) {
+	lengthBuf := make([]byte, 2)
+	winnerCounter := uint16(0)
+
+	// Read the message length from the connection
+	if err := nc.receiveAll(lengthBuf); err != nil {
+		log.Errorf("failed to read winner documents length: %v", err)
+		return 0, err
+	}
+
+	// Convert the length to uint16
+	length := binary.BigEndian.Uint16(lengthBuf)
+
+	if length == 0 {
+		log.Debugf("No winners received")
+		return 0, nil
+	}
+
+	// Buffer for the winning documents
+	dataBuf := make([]byte, length)
+
+	// Read the data from the connection
+	if err := nc.receiveAll(dataBuf); err != nil {
+		log.Errorf("failed to read winner documents: %v", err)
+		return 0, err
+	}
+
+	// Process the winning documents
+	for i := 0; i < len(dataBuf); i += 4 {
+		if i+4 > len(dataBuf) {
+			log.Errorf("invalid winner document length")
+		}
+
+		document := binary.BigEndian.Uint32(dataBuf[i : i+4])
+		_ = append(g.Winners, document)
+		winnerCounter++
+	}
+
+	return winnerCounter, nil
 }

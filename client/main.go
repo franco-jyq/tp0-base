@@ -119,17 +119,20 @@ func main() {
 		return
 	}
 	PrintConfig(v)
-	// 79 bytes maxAmount: Cantidad de apuestas
-	// 1580 batch size -> 20 apuestas por batch
-	// 8192/79 -> maxAmount = 103 | Si es mayor, pisar con 103
 
 	houseId := v.GetInt("id")
 	batchSize := v.GetInt("batch.maxAmount")
 
-	gamblerProtocol := common.NewGamblerProtocol(uint8(houseId), records, uint16(batchSize))
+	gamblerProtocol, err := common.NewGamblerProtocol(uint8(houseId), records, uint16(batchSize))
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
 	netComm := common.NewNetComm(v.GetString("server.address"), v.GetString("id"))
 
-	client := common.NewClient(*gamblerProtocol, *netComm)
+	client := common.NewClient(*gamblerProtocol, *netComm, uint16(houseId))
 
 	client.StartClientLoop()
 }

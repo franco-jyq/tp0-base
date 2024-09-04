@@ -48,6 +48,21 @@ func (nc *NetComm) sendAll(data []byte) error {
 	return nil
 }
 
+func (nc *NetComm) receiveAll(data []byte) error {
+	totalReceived := 0
+	for totalReceived < len(data) {
+		n, err := nc.conn.Read(data[totalReceived:])
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("connection closed prematurely")
+		}
+		totalReceived += n
+	}
+	return nil
+}
+
 func (nc *NetComm) CloseConnection() {
 	nc.conn.Close()
 }

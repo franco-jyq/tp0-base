@@ -14,14 +14,16 @@ var log = logging.MustGetLogger("log")
 type Client struct {
 	gamblerProt GamblerProtocol
 	netComm     NetComm
+	clientId    uint16
 }
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
-func NewClient(gambler GamblerProtocol, netComm NetComm) *Client {
+func NewClient(gambler GamblerProtocol, netComm NetComm, clientId uint16) *Client {
 	client := &Client{
 		gamblerProt: gambler,
 		netComm:     netComm,
+		clientId:    clientId,
 	}
 	return client
 }
@@ -40,8 +42,10 @@ func (c *Client) StartClientLoop() {
 		return
 	default:
 
+		// Create connection with the server
 		err := c.netComm.createConnection()
 
+		// Close connection when function ends
 		defer c.netComm.CloseConnection()
 
 		if err != nil {
@@ -52,51 +56,64 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		batchBytes, _ := c.gamblerProt.GetBatchSize()
-
-		c.netComm.sendAll(batchBytes)
-
-		c.gamblerProt.SerializeRecords()
+		// Send batch size
+		metadataBytes, _ := c.gamblerProt.GetMetadata(c.clientId)
+		if err := c.netComm.sendAll(metadataBytes); err != nil {
+			log.Errorf("action: send_message | result: fail | client_id: %v | error: %v", c.netComm.clientId, err)
+			return
+		}
 
 		for done_sending, done_receiving := false, false; !done_sending && !done_receiving; {
 
-			batch, _ := c.gamblerProt.GetBatch()
-			log.Debugf("Batch generated")
+			// Get the next batch
+			batch, err := c.gamblerProt.GetBatch()
+
+			if err != nil {
+				log.Errorf("action: get_batch | result: fail | client_id: %v | error: %v", c.netComm.clientId, err)
+				return
+			}
 
 			if len(batch) == 0 {
 				done_sending = true
 			}
 
+			// Send batch to server
 			err = c.netComm.sendAll(batch)
-			log.Debugf("Batch sended")
 
 			if err != nil {
 				log.Errorf("action: send_message | result: fail | client_id: %v | error: %v")
-				c.netComm.CloseConnection()
 				return
 			}
 
+			// Receive ack batch from server
 			ack_batch, is_ended, err := c.gamblerProt.ReceiveAckBatch(c.netComm.conn)
 
 			if err != nil {
-				log.Errorf("error: %v",
-					err,
-				)
+				log.Errorf("error: %v", err)
 				return
 			}
 
 			done_receiving = is_ended
 
+			// Deserialize ack batch
 			err = c.gamblerProt.DeserializeAckBatch(ack_batch)
 
 			if err != nil {
-				log.Errorf("error: %v",
-					err,
-				)
+				log.Errorf("error: %v", err)
+				return
 			}
 		}
 
-		c.netComm.CloseConnection()
+		// Receive winners list
+		winnerCounter, err := c.gamblerProt.ReceiveWinnersList(c.netComm)
+
+		if err != nil {
+			log.Errorf("Error receiving winner list: %v", err)
+			return
+		}
+
+		log.Infof(`action: consulta_ganadores | result: success | cant_ganadores: %v`, winnerCounter)
+
 		return
 	}
 }

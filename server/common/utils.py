@@ -24,6 +24,14 @@ class Bet:
         self.birthdate = datetime.date.fromisoformat(birthdate)
         self.number = int(number)
 
+
+
+""" Empties the STORAGE_FILEPATH file. """
+def empty_storage_file() -> None:
+    with open(STORAGE_FILEPATH, 'w'):
+        pass    
+
+
 """ Checks whether a bet won the prize or not. """
 def has_won(bet: Bet) -> bool:
     return bet.number == LOTTERY_WINNER_NUMBER
@@ -49,4 +57,6 @@ def load_bets() -> list[Bet]:
         for row in reader:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
 
+
+    
 
