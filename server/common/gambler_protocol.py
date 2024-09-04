@@ -119,19 +119,16 @@ class GamblerProtocol:
         return struct.pack('>H', length) + data
 
 
-    def get_lottery_winners(self):
+    def load_lottery_winners(self, winners):
         """
         Returns the lottery winners.
         """
         bets = load_bets()
-        winners = {}        
         for bet in bets:
-            
             if bet.agency not in winners:
                 winners[bet.agency] = []
-
+            
             if has_won(bet):
-                logging.debug(f'action: ganador | result: success | dni: {bet.document} | numero: {bet.number}')
-                winners[bet.agency].append(bet)
-        
-        return winners
+                current_winners = winners[bet.agency]  # Obtener la lista actual
+                current_winners.append(bet)            # Agregar el nuevo bet a la lista
+                winners[bet.agency] = current_winners  # Reasignar la lista actualizada al diccionario

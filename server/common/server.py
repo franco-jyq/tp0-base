@@ -5,6 +5,7 @@ import threading
 from .utils import empty_storage_file
 from .gambler_protocol import  GamblerProtocol
 import queue
+import multiprocessing
 
 MAX_BATCH_SIZE = 8137
 PACKET_SIZE = 79
@@ -27,6 +28,7 @@ class Server:
         self._client_queue = queue.Queue()
         self._clients_registered = {}
         self._clients_proccessed = 0
+        self._clients_arrived = 0
         self._max_clients = MAX_CLIENTS
 
     def run(self):
@@ -38,6 +40,11 @@ class Server:
         finishes, servers starts to accept new connections again
         """   
         signal.signal(signal.SIGTERM, self.__signal_handler)
+        barrier = multiprocessing.Barrier(self._max_clients + 1)
+        store_and_load_bet_lock = multiprocessing.Lock()
+        cond = multiprocessing.Condition()
+        manager = multiprocessing.Manager()
+        winners = manager.dict()
 
         while not self._server_is_shutting_down.is_set():
             
@@ -48,32 +55,34 @@ class Server:
                 client_sock = self.__accept_new_connection()
                 
                 # Handle client connection
-                client_sock = self.__handle_client_connection(client_sock)
-                self._clients_proccessed += 1
-                self._client_queue.put(client_sock)
-
+                p = multiprocessing.Process(target=self.__handle_client_connection, args=(client_sock,barrier, winners, cond, store_and_load_bet_lock))
+                self._client_queue.put(p)
+                p.start()
+                self._clients_arrived += 1
+            
                 # Check if all clients have been processed
-                if self._clients_proccessed == self._max_clients:
+                if self._clients_arrived == self._max_clients:
+
+                    # Wait for all clients to store the bets
+                    barrier.wait()                                                                                            
+                    
                     logging.info(f'action: sorteo | result: success')                    
                     
-                    # Get winners
-                    winners = self._gambler_protocol.get_lottery_winners()
-                    
-                    # Serialize winners
-                    # serialized_winners = self._gambler_protocol.serialize_winners_documents(winners)
+                    # Load winners
+                    with store_and_load_bet_lock:
+                        self._gambler_protocol.load_lottery_winners(winners)
+                                                                
+                    # Notify all clients that the lottery has finished
+                    with  cond:
+                        cond.notify_all()
                     
                     # Send winners to clients
-                    while not self._client_queue.empty():
-                        client_sock = self._client_queue.get()
-                        id = self._clients_registered[client_sock]
-                        cli_winners = winners[id]
-                        serialized_winners = self._gambler_protocol.serialize_winners_documents(cli_winners)
-                        client_sock.sendall(serialized_winners)
-                        client_sock.close()
-                    
-                    break
-                
-
+                    while not self._client_queue.empty():                        
+                        client_p = self._client_queue.get()
+                        client_p.join()                                            
+            
+                    break                
+            
             except socket.timeout:
                 continue             
         
@@ -81,7 +90,7 @@ class Server:
 
 
 
-    def __handle_client_connection(self, client_sock):
+    def __handle_client_connection(self, client_sock, barrier, winners, cond, store_bet_lock):
         """
         Read message from a specific client socket and closes the socket
 
@@ -90,8 +99,7 @@ class Server:
         """
         try:            
             id = self._gambler_protocol.receive_metadata(client_sock)
-            logging.info(f'action: metadata_recibida | result: success | id: {id}')
-            self._clients_registered[client_sock] = id
+            logging.debug(f'action: metadata_recibida | result: success | id: {id}')
             end_msg_received = False
             bets_received = 0            
             
@@ -108,8 +116,10 @@ class Server:
                     return
 
                 # Store bets
-                gamblers_stored = self._gambler_protocol.store_bets(gamblers)
+                with store_bet_lock:
+                    gamblers_stored = self._gambler_protocol.store_bets(gamblers)
 
+                
                 if not gamblers_stored:
                     logging.error(f'action: apuesta_almacenada | result: fail | cantidad: {bets_received}')
                     return
@@ -121,14 +131,23 @@ class Server:
                 self._gambler_protocol.send_packets_ack(client_sock, gamblers_stored)                
             
             logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_received}')    
-            
 
+            # Wait for all clients to finish
+            barrier.wait()
+
+            # Wait for the lottery to finish
+            with cond:
+                cond.wait()
+                cli_winners = winners[id]
+                serialized_winners = self._gambler_protocol.serialize_winners_documents(cli_winners)
+                client_sock.sendall(serialized_winners)
+                        
 
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {}", e)
             client_sock.close()
         finally:
-            return client_sock
+            client_sock.close()
 
     def __accept_new_connection(self):
         """
