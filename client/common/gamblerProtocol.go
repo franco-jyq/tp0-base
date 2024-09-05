@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 )
 
@@ -19,6 +18,7 @@ const (
 	PacketSize         = 79
 	AckSize            = 9
 	MaxBatchSize       = 8137
+	WinnersMaxLenght   = 2
 )
 
 var END_MESSAGE = append([]byte("END_MESSAGE"), make([]byte, PacketSize-len("END_MESSAGE"))...)
@@ -193,9 +193,6 @@ func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 		n, err := s.Read(buffer)
 
 		if err != nil {
-			if err == io.EOF {
-				return nil, false, fmt.Errorf("connection closed prematurely")
-			}
 			return nil, false, err
 		}
 
@@ -220,7 +217,8 @@ func (g *GamblerProtocol) ReceiveAckBatch(s net.Conn) ([]byte, bool, error) {
 // ReceiveWinnersList Receives the winners list from the server
 // and returns the number of winners received.
 func (g *GamblerProtocol) ReceiveWinnersList(nc NetComm) (uint16, error) {
-	lengthBuf := make([]byte, 2)
+
+	lengthBuf := make([]byte, WinnersMaxLenght)
 	winnerCounter := uint16(0)
 
 	// Read the message length from the connection
@@ -247,8 +245,8 @@ func (g *GamblerProtocol) ReceiveWinnersList(nc NetComm) (uint16, error) {
 	}
 
 	// Process the winning documents
-	for i := 0; i < len(dataBuf); i += 4 {
-		if i+4 > len(dataBuf) {
+	for i := 0; i < len(dataBuf); i += DNIMaxLenght {
+		if i+DNIMaxLenght > len(dataBuf) {
 			log.Errorf("invalid winner document length")
 		}
 
