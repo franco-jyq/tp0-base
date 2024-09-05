@@ -50,7 +50,7 @@ make docker-compose-up
 
 Este protocolo maneja la interacción entre un servidor central (en Python) y múltiples clientes (en Go) que simulan agencias de lotería enviando batchs de apuestas. A continuación se detalla cómo se lleva a cabo el envío, recepción y procesamiento de los mensajes entre las agencias y el servidor.
 
-[Diagrama de secuencia](d-secuencia.png)
+![Diagrama de secuencia](d-secuencia.png)
 
 ## Estructura del Mensaje
 
