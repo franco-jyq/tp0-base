@@ -1,6 +1,6 @@
 #!/bin/bash
 
-NETWORK_NAME="testing_net"
+NETWORK_NAME="tp0_testing_net"
 SERVER_CONTAINER_NAME="server"
 SERVER_IP="172.25.125.2"  
 SERVER_PORT=12345         
