@@ -25,6 +25,8 @@ type GamblerProtocol struct {
 	BetNumber uint32
 }
 
+// NewGamblerProtocol creates a new gambler protocol with the given parameters.
+// It returns a pointer to the created gambler protocol.
 func NewGamblerProtocol(houseId uint8, name string, lastName string, dni uint32, birth string, betNum uint32) *GamblerProtocol {
 	gamblerProtocol := &GamblerProtocol{
 		HouseID:   houseId,
@@ -37,6 +39,7 @@ func NewGamblerProtocol(houseId uint8, name string, lastName string, dni uint32,
 	return gamblerProtocol
 }
 
+// SerializeBet serializes the gambler protocol into a byte array.
 func (g *GamblerProtocol) SerializeBet() ([]byte, error) {
 	buffer := new(bytes.Buffer)
 
@@ -73,6 +76,8 @@ func (g *GamblerProtocol) SerializeBet() ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// DeserializeResponse deserializes the response from the server into the
+// corresponding fields of the response message.
 func (g *GamblerProtocol) DeserializeResponse(response []byte) (uint32, uint32, bool, error) {
 
 	var dni uint32
@@ -94,6 +99,8 @@ func (g *GamblerProtocol) DeserializeResponse(response []byte) (uint32, uint32, 
 	return dni, betNumber, success, nil
 }
 
+// writeStringAndPadd writes a string to a buffer and fills the remaining space
+// with zeros.
 func writeStringAndPadd(buffer *bytes.Buffer, str string, length int) error {
 	data := []byte(str)
 	if len(data) > length {

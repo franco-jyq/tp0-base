@@ -26,7 +26,7 @@ func NewClient(gambler GamblerProtocol, netComm NetComm) *Client {
 	return client
 }
 
-// Client = QuinielaClient
+// StartClientLoop Starts and sends a bet to the server. It waits for the confirmation and logs the result.
 func (c *Client) StartClientLoop() {
 
 	sigChan := make(chan os.Signal, 1)

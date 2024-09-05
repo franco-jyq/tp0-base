@@ -12,6 +12,7 @@ type NetComm struct {
 	clientId      string
 }
 
+// NewNetComm Creates a new NetComm object with the given parameters.
 func NewNetComm(serverAddress string, clientId string) *NetComm {
 
 	return &NetComm{
@@ -21,6 +22,7 @@ func NewNetComm(serverAddress string, clientId string) *NetComm {
 	}
 }
 
+// CreateConnection Creates a connection to the server.
 func (nc *NetComm) createConnection() error {
 	conn, err := net.Dial("tcp", nc.serverAddress)
 	if err != nil {
@@ -34,6 +36,7 @@ func (nc *NetComm) createConnection() error {
 	return nil
 }
 
+// SendAll Sends the given data using the connection.
 func (nc *NetComm) sendAll(data []byte) error {
 	totalSent := 0
 	for totalSent < len(data) {
@@ -49,6 +52,7 @@ func (nc *NetComm) sendAll(data []byte) error {
 	return nil
 }
 
+// ReadAll Reads the given amount of bytes from the connection.
 func (nc *NetComm) readAll(length int) ([]byte, error) {
 	buffer := make([]byte, length)
 	totalRead := 0
@@ -74,6 +78,7 @@ func (nc *NetComm) readAll(length int) ([]byte, error) {
 	return buffer, nil
 }
 
+// CloseConnection Closes the connection.
 func (nc *NetComm) CloseConnection() {
 	nc.conn.Close()
 }

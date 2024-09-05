@@ -4,18 +4,19 @@ from .utils import store_bets, Bet
 
 class GamblerProtocol:
     def __init__(self, house_id, name, last_name, dni, birth, bet_number):
-        self.house_id = house_id  # Already an integer, no need to decode
+        self.house_id = house_id 
         self.name = name.decode('utf-8').strip('\x00')
         self.last_name = last_name.decode('utf-8').strip('\x00')
-        self.dni = dni  # Already an integer, no need to decode
+        self.dni = dni 
         self.birth = birth.decode('utf-8').strip('\x00')
-        self.bet_number = bet_number  # Already an integer, no need to decode
+        self.bet_number = bet_number  
         self.status_code = 0
 
     @classmethod
     def deserialize(cls, data):
-        # Big-endian format, matching the Go client's serialization
-        # HouseID (1 byte), Name (30 bytes), LastName (30 bytes), Birth (10 bytes), DNI (4 bytes), BetNumber (4 bytes)
+        """
+        Deserialize the data received from the client.
+        """
         format_string = '>B30s30sI10sI'
         unpacked_data = struct.unpack(format_string, data)
         return cls(*unpacked_data)
