@@ -7,28 +7,11 @@ SERVER_PORT=12345
 MESSAGE="Hello, Echo Server!"
 VERBOSE=0  
 
-# Parse command-line options
-while [[ "$1" != "" ]]; do
-    case $1 in
-        -v | --verbose ) 
-            VERBOSE=1
-            ;;
-    esac
-    shift
-done
 
 validate_server() {
-    if [ $VERBOSE -eq 1 ]; then
-        echo "Validating echo server..."
-    fi
-
+    
     output=$(docker run --rm --network $NETWORK_NAME busybox sh -c "echo '$MESSAGE' | nc -w 5 server $SERVER_PORT")
 
-
-    if [ $VERBOSE -eq 1 ]; then
-        echo "Validation Output:"
-        echo "$output"
-    fi
 
     # Check if the output matches the expected echo
     if [ "$output" = "$MESSAGE" ]; then
