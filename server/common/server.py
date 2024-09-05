@@ -163,6 +163,10 @@ class Server:
 
         Function close the server socket.
         """
+        while not self._client_queue.empty():                        
+            client_p = self._client_queue.get()
+            client_p.join()                                            
+        
         if self._server_socket:
             self._server_socket.close()
             logging.debug('action: close_socket | result: success')

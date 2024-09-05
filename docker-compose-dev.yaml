@@ -21,11 +21,6 @@ services:
     environment:
       - CLI_ID=1
       - CLI_LOG_LEVEL=INFO
-      - CLI_NOMBRE=Santiago Lionel
-      - CLI_APELLIDO=Lorca
-      - CLI_DOCUMENTO=30904465
-      - CLI_NACIMIENTO=1999-03-17
-      - CLI_NUMERO=7574
       - CLI_AGENCY_DATA_FILE=/data/agency-1.csv
     networks:
       - testing_net
@@ -41,11 +36,6 @@ services:
     environment:
       - CLI_ID=2
       - CLI_LOG_LEVEL=INFO
-      - CLI_NOMBRE=Santiago Lionel
-      - CLI_APELLIDO=Lorca
-      - CLI_DOCUMENTO=30904465
-      - CLI_NACIMIENTO=1999-03-17
-      - CLI_NUMERO=7574
       - CLI_AGENCY_DATA_FILE=/data/agency-2.csv
     networks:
       - testing_net
@@ -61,11 +51,6 @@ services:
     environment:
       - CLI_ID=3
       - CLI_LOG_LEVEL=INFO
-      - CLI_NOMBRE=Santiago Lionel
-      - CLI_APELLIDO=Lorca
-      - CLI_DOCUMENTO=30904465
-      - CLI_NACIMIENTO=1999-03-17
-      - CLI_NUMERO=7574
       - CLI_AGENCY_DATA_FILE=/data/agency-3.csv
     networks:
       - testing_net
@@ -81,11 +66,6 @@ services:
     environment:
       - CLI_ID=4
       - CLI_LOG_LEVEL=INFO
-      - CLI_NOMBRE=Santiago Lionel
-      - CLI_APELLIDO=Lorca
-      - CLI_DOCUMENTO=30904465
-      - CLI_NACIMIENTO=1999-03-17
-      - CLI_NUMERO=7574
       - CLI_AGENCY_DATA_FILE=/data/agency-4.csv
     networks:
       - testing_net
@@ -101,11 +81,6 @@ services:
     environment:
       - CLI_ID=5
       - CLI_LOG_LEVEL=INFO
-      - CLI_NOMBRE=Santiago Lionel
-      - CLI_APELLIDO=Lorca
-      - CLI_DOCUMENTO=30904465
-      - CLI_NACIMIENTO=1999-03-17
-      - CLI_NUMERO=7574
       - CLI_AGENCY_DATA_FILE=/data/agency-5.csv
     networks:
       - testing_net
@@ -116,6 +91,7 @@ services:
     
 networks:
   testing_net:
+    name: testing_net
     ipam:
       driver: default
       config:
