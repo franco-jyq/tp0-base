@@ -43,6 +43,7 @@ for i in range(1, int(NUM_CLIENTS) + 1):
 docker_compose_template += """
 networks:
   testing_net:
+    name: testing_net
     ipam:
       driver: default
       config:
