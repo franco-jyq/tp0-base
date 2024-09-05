@@ -8,6 +8,7 @@ NUM_CLIENTS = sys.argv[2]
 # Define the static part of the docker-compose file
 docker_compose_template = """
 version: '3'
+name: tp0
 services:
   server:
     container_name: server
