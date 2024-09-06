@@ -58,5 +58,17 @@ def load_bets() -> list[Bet]:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
 
 
-    
 
+
+def read_all(sock, num_bytes):
+    """
+    Reads exactly num_bytes from the socket.
+    """
+    buffer = bytearray()
+    
+    while len(buffer) < num_bytes:
+        chunk = sock.recv(num_bytes - len(buffer))  # Cambiar read() a recv()
+        if not chunk:
+            raise EOFError("Sock ended before the required number of bytes could be read.")
+        buffer.extend(chunk)
+    return bytes(buffer)

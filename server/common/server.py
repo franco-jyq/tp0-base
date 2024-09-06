@@ -4,6 +4,7 @@ import signal
 import threading
 from .utils import empty_storage_file
 from .gambler_protocol import  GamblerProtocol
+from .lottery import Lottery
 import queue
 
 MAX_BATCH_SIZE = 8137
@@ -28,6 +29,7 @@ class Server:
         self._clients_registered = {}
         self._clients_proccessed = 0
         self._max_clients = MAX_CLIENTS
+        self._lottery = Lottery()
 
     def run(self):
         """
@@ -57,18 +59,19 @@ class Server:
                     logging.info(f'action: sorteo | result: success')                    
                     
                     # Get winners
-                    winners = self._gambler_protocol.get_lottery_winners()
-                    
-                    # Serialize winners
-                    # serialized_winners = self._gambler_protocol.serialize_winners_documents(winners)
-                    
+                    self._lottery.load_lottery_winners()
+
                     # Send winners to clients
                     while not self._client_queue.empty():
                         client_sock = self._client_queue.get()
                         id = self._clients_registered[client_sock]
-                        cli_winners = winners[id]
-                        serialized_winners = self._gambler_protocol.serialize_winners_documents(cli_winners)
-                        client_sock.sendall(serialized_winners)
+                        serialized_winners = self._lottery.serialize_client_winners(id)                        
+                        
+                        try:
+                            client_sock.sendall(serialized_winners)                        
+                        except OSError as e:
+                            logging.error(f'action: enviar_ganadores | result: fail | error: {e}')
+                        
                         client_sock.close()
                     
                     break
@@ -108,7 +111,7 @@ class Server:
                     return
 
                 # Store bets
-                gamblers_stored = self._gambler_protocol.store_bets(gamblers)
+                gamblers_stored = self._lottery.store_bets(gamblers)
 
                 if not gamblers_stored:
                     logging.error(f'action: apuesta_almacenada | result: fail | cantidad: {bets_received}')
@@ -118,7 +121,7 @@ class Server:
                 
                 # TODO handle error
                 # Send acknowledgment of the bets stored
-                self._gambler_protocol.send_packets_ack(client_sock, gamblers_stored)                
+                self._gambler_protocol.send_ack_packets(client_sock, gamblers_stored)                
             
             logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_received}')    
             
