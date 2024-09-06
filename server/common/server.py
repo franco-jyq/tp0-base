@@ -4,6 +4,7 @@ import signal
 import threading
 from .utils import empty_storage_file
 from .gambler_protocol import  GamblerProtocol
+from .lottery import Lottery
 import queue
 import multiprocessing
 
@@ -19,6 +20,7 @@ class Server:
         self._server_socket.listen(listen_backlog)
         self._server_is_shutting_down = threading.Event()
         self._gambler_protocol = GamblerProtocol(max_batch_size, packet_size, ack_size)
+        self._lottery = Lottery()
         self._client_queue = queue.Queue()
         self._clients_registered = {}
         self._clients_proccessed = 0
@@ -59,7 +61,7 @@ class Server:
                     logging.info(f'action: sorteo | result: success')                    
                     
                     # Load winners                    
-                    self._gambler_protocol.load_lottery_winners()
+                    self._lottery.load_lottery_winners()
                                                                 
                     # Notify all clients that the lottery has finished
                     with  cond:
@@ -105,7 +107,7 @@ class Server:
                     return
 
                 # Store bets
-                gamblers_stored = self._gambler_protocol.store_bets(gamblers)
+                gamblers_stored = self._lottery.store_bets(gamblers)
 
                 
                 if not gamblers_stored:
@@ -125,7 +127,7 @@ class Server:
             # Wait for the lottery to finish
             with cond:
                 cond.wait()
-                serialized_winners = self._gambler_protocol.serialize_winners_documents(id)
+                serialized_winners = self._lottery.serialize_client_winners(id)
                 client_sock.sendall(serialized_winners)
                         
 
