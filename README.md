@@ -83,7 +83,7 @@ El batch de confirmaciones finaliza con el mensaje `END`, de **9 bytes**.
 
 ## Servidor (Central de Lotería)
 
-El servidor recibe los batch de apuestas, los deserializa y almacena en un archivo CSV haciendo uso de la clase `GamblerProtocol` y `Gambler`. El protocolo del servidor sigue estos pasos:
+El servidor recibe los batch de apuestas, los deserializa y almacena en un archivo CSV haciendo uso de la clase `GamblerProtocol`, `Lottery` y `Gambler`. El protocolo del servidor sigue estos pasos:
 
 1. **Recepción del Batch**:
    El servidor utiliza la metodo `receieve_batch_packets` para recibir las apuestas del cliente. El batch se procesa hasta que se detecta el mensaje `END_MESSAGE`, que marca el fin de las apuestas.
@@ -99,7 +99,7 @@ El servidor recibe los batch de apuestas, los deserializa y almacena en un archi
 
 ### Mensaje de Ganadores
 
-Cuando se completa la evaluación de las apuestas, el servidor envía un mensaje que incluye la lista de documentos ganadores a través de la función `serialize_winners_documents`. Este mensaje tiene la siguiente estructura:
+Cuando se completa la evaluación de las apuestas, el servidor envía un mensaje que incluye la lista de documentos ganadores a través de la función `serialize_client_winners`. Este mensaje tiene la siguiente estructura:
 
 1. **Longitud del Mensaje**: El servidor primero envía 2 bytes que indican la longitud total del mensaje.
 2. **Documentos Ganadores**: Luego, se envían los números de DNI ganadores, cada uno de 4 bytes.
